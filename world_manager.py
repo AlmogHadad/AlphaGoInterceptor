@@ -22,11 +22,9 @@ class WorldManager:
 
 # Define the state representation
 class State:
-    def __init__(self, blue_positions, blue_velocities, red_positions, red_velocities):
+    def __init__(self, blue_positions, red_positions, red_velocities):
         self.blue_positions = blue_positions
-        self.blue_velocities = blue_velocities
         self.red_positions = red_positions
-        self.red_velocities = red_velocities
 
     def get_state_vector(self):
         return np.concatenate([

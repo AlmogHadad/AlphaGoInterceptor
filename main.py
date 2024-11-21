@@ -3,72 +3,54 @@ os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 import numpy as np
 from models import create_policy_network, create_value_network, train_networks
 from world_manager import State, apply_action
-from mcts import MCTS, MCTSNode
+from mcts import MCTS
 
 
 # Example workflow
 if __name__ == "__main__":
-    # Example setup
-    blue_positions = np.array([[0, 0], [5, 5]])
-    blue_velocities = np.array([[1, 0], [0, 1]])
-    red_positions = np.array([[10, 10], [15, 15]])
-    red_velocities = np.array([[0, -1], [-1, 0]])
+    # Step 1: Initialize Neural Networks
+    print("Initializing policy and value networks...")
+    policy_network = create_policy_network()
+    value_network = create_value_network()
 
-    # Initialize state
-    state = State(blue_positions, blue_velocities, red_positions, red_velocities)
-    state_vector = state.get_state_vector()
+    # Compile the models
+    policy_network.compile(optimizer='adam', loss='categorical_crossentropy')
+    value_network.compile(optimizer='adam', loss='mse')
 
-    # Create networks
-    input_dim = len(state_vector)
-    action_dim = 5  # Example: 5 possible actions per object
-    policy_network = create_policy_network(input_dim, action_dim)
-    value_network = create_value_network(input_dim)
+    # Step 2: Create MCTS Instance
+    print("Initializing Monte Carlo Tree Search...")
+    mcts = MCTS(policy_network, value_network, simulations=100)
 
-    # Initialize MCTS and collect training data
-    training_data = []
-    for episode in range(100):  # Simulate 100 episodes
-        root = MCTSNode(state)
-        mcts = MCTS(policy_network, value_network, action_dim)
-        actions, visits = mcts.search(root, num_simulations=50)
+    # Step 3: Set Up the Game Environment
+    print("Setting up the game environment...")
+    board = np.zeros((10, 10))  # Initialize a 10x10 empty board
+    # Add initial positions for blue and red objects
+    board[0, 0] = 1  # Example: Place one blue object
+    board[9, 9] = -1  # Example: Place one red object
 
-        # Record state, policy target, and value target
-        state_vector = root.state.get_state_vector()
-        policy_target = np.array(visits) / sum(visits)
-        value_target = np.max(policy_target)  # Example: use the max visit probability as value
-        training_data.append((state_vector, policy_target, value_target))
+    print("Initial board state:")
+    print(board)
 
-    # Train the networks
-    policy_loss, value_loss = train_networks(policy_network, value_network, training_data)
-    print("Policy loss:", policy_loss)
-    print("Value loss:", value_loss)
+    # Step 4: Play a Game
+    print("Starting the game...")
+    turn = 0  # 0 for blue (player), 1 for red (AI or simulation)
+    while not mcts.is_terminal(board):
+        print(f"Turn {'Blue' if turn == 0 else 'Red'}:")
+        if turn == 0:  # Blue player's turn
+            move = mcts.search(board)  # Use MCTS to decide the best move
+            print(f"Blue moves: {move}")
+            board = mcts.apply_move(board, move)
+        else:  # Red's turn (for now, red doesn't actively play)
+            print("Red does nothing (example logic).")
 
-    # Initialize MCTS
-    mcts = MCTS(policy_network, value_network, action_dim)
+        print("Current board state:")
+        print(board)
 
-    # Root node
-    root = MCTSNode(state)
+        # Switch turn
+        turn = 1 - turn
 
-    # Perform MCTS and apply actions in a loop
-    for step in range(10):  # Run for a maximum of 10 steps
-        actions, visits = mcts.search(root, num_simulations=50)
-        print(f"Step {step}: Best action is {actions[np.argmax(visits)]}")
-
-        # Apply the best action
-        state = apply_action(state, actions[np.argmax(visits)])
-
-        # Update root with the new state
-        root = MCTSNode(state)
-
-        # update the red objects position
-        state.red_positions += state.red_velocities
-
-
-        # Print the new state (for debugging)
-        print("New blue positions:", state.blue_positions)
-        print("Red positions:", state.red_positions)
-
-
-        # Break if termination conditions are met (e.g., interception)
-        if np.linalg.norm(state.blue_positions - state.red_positions, axis=1).min() < 1.0:
-            print("Red objects intercepted!")
-            break
+    # Step 5: Determine the Winner
+    if np.count_nonzero(board == -1) == 0:
+        print("Blue wins! All red objects have been eliminated.")
+    else:
+        print("Red wins or the game ended in a draw.")
